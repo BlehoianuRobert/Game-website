@@ -1,0 +1,1401 @@
+openapi: 3.0.3
+info:
+  title: GRIDFORGE API
+  description: REST API for the GRIDFORGE gaming platform — players, games, items, gifts, progress, leaderboards and ads.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local dev
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+
+    Token:
+      type: object
+      properties:
+        token:
+          type: string
+
+    Player:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        status:
+          type: string
+          enum: [active, banned, suspended]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    PlayerProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        player_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+          nullable: true
+        avatar_url:
+          type: string
+          nullable: true
+        bio:
+          type: string
+          nullable: true
+        subscribed:
+          type: boolean
+        last_ad_shown_at:
+          type: string
+          format: date-time
+          nullable: true
+        ad_state:
+          type: string
+          enum: [idle, ad_pending, ad_playing]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    PlayerWithProfile:
+      allOf:
+        - $ref: '#/components/schemas/Player'
+        - type: object
+          properties:
+            profile:
+              $ref: '#/components/schemas/PlayerProfile'
+
+    Game:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    GameVersion:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        game_id:
+          type: string
+          format: uuid
+        version:
+          type: string
+        is_active:
+          type: boolean
+        released_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Item:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        game_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        rarity:
+          type: string
+          enum: [common, uncommon, rare, epic, legendary]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    PlayerItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        player_id:
+          type: string
+          format: uuid
+        item_id:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          minimum: 1
+        item:
+          $ref: '#/components/schemas/Item'
+
+    Gift:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sender_id:
+          type: string
+          format: uuid
+        recipient_id:
+          type: string
+          format: uuid
+        item_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, accepted, declined]
+        sent_at:
+          type: string
+          format: date-time
+        responded_at:
+          type: string
+          format: date-time
+          nullable: true
+        sender:
+          $ref: '#/components/schemas/Player'
+        recipient:
+          $ref: '#/components/schemas/Player'
+        item:
+          $ref: '#/components/schemas/Item'
+
+    Progress:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        player_id:
+          type: string
+          format: uuid
+        game_id:
+          type: string
+          format: uuid
+        score:
+          type: integer
+          minimum: 0
+        updated_at:
+          type: string
+          format: date-time
+        game:
+          $ref: '#/components/schemas/Game'
+
+    LeaderboardEntry:
+      type: object
+      properties:
+        rank:
+          type: integer
+        player_id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        score:
+          type: integer
+        updated_at:
+          type: string
+          format: date-time
+
+    AdStatus:
+      type: object
+      properties:
+        ads_enabled:
+          type: boolean
+        state:
+          type: string
+          enum: [idle, ad_pending, ad_playing]
+        next_ad_in_seconds:
+          type: integer
+          nullable: true
+
+# ─── Paths ────────────────────────────────────────────────────────────────────
+
+paths:
+
+  # ── Auth ────────────────────────────────────────────────────────────────────
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new player
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, email, password]
+              properties:
+                username:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+      responses:
+        '201':
+          description: Player registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      token:
+                        type: string
+                      player:
+                        $ref: '#/components/schemas/Player'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login and receive a JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Token'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Invalidate the current JWT
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logged out
+        '401':
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current authenticated player
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current player with profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/PlayerWithProfile'
+        '401':
+          description: Unauthenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ── Players ─────────────────────────────────────────────────────────────────
+
+  /players/me:
+    get:
+      tags: [Players]
+      summary: Get current player profile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Player with profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/PlayerWithProfile'
+    put:
+      tags: [Players]
+      summary: Update current player profile
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                display_name:
+                  type: string
+                  maxLength: 64
+                avatar_url:
+                  type: string
+                  format: uri
+                  nullable: true
+                bio:
+                  type: string
+                  maxLength: 500
+                  nullable: true
+      responses:
+        '200':
+          description: Updated player
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/PlayerWithProfile'
+
+  /players:
+    get:
+      tags: [Players]
+      summary: List all players (paginated)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, banned, suspended]
+      responses:
+        '200':
+          description: Paginated player list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+
+  /players/{id}:
+    get:
+      tags: [Players]
+      summary: Get a player by UUID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Player found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/PlayerWithProfile'
+        '404':
+          description: Player not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /players/{id}/status:
+    patch:
+      tags: [Players]
+      summary: Update a player's status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [active, banned, suspended]
+      responses:
+        '200':
+          description: Player updated
+        '404':
+          description: Player not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ── Games ───────────────────────────────────────────────────────────────────
+
+  /games:
+    get:
+      tags: [Games]
+      summary: List all games
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Paginated games list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+    post:
+      tags: [Games]
+      summary: Create a game
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  maxLength: 128
+                description:
+                  type: string
+                  nullable: true
+      responses:
+        '201':
+          description: Game created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Game'
+        '422':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /games/{id}:
+    get:
+      tags: [Games]
+      summary: Get a game with its versions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Game with versions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    allOf:
+                      - $ref: '#/components/schemas/Game'
+                      - type: object
+                        properties:
+                          versions:
+                            type: array
+                            items:
+                              $ref: '#/components/schemas/GameVersion'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      tags: [Games]
+      summary: Update a game
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                  nullable: true
+      responses:
+        '200':
+          description: Updated game
+    delete:
+      tags: [Games]
+      summary: Delete a game (cascades versions, items, progress)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deleted
+
+  /games/{gameId}/versions:
+    get:
+      tags: [Games]
+      summary: List versions for a game
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: gameId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Version list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GameVersion'
+    post:
+      tags: [Games]
+      summary: Add a version to a game
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: gameId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version:
+                  type: string
+                is_active:
+                  type: boolean
+                released_at:
+                  type: string
+                  format: date-time
+      responses:
+        '201':
+          description: Version created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/GameVersion'
+
+  /games/{gameId}/versions/{versionId}:
+    patch:
+      tags: [Games]
+      summary: Update a game version
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: gameId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                version:
+                  type: string
+                is_active:
+                  type: boolean
+      responses:
+        '200':
+          description: Updated version
+    delete:
+      tags: [Games]
+      summary: Delete a game version
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: gameId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deleted
+
+  # ── Items ───────────────────────────────────────────────────────────────────
+
+  /items:
+    get:
+      tags: [Items]
+      summary: List items (filter by game_id or rarity)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: game_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: rarity
+          in: query
+          schema:
+            type: string
+            enum: [common, uncommon, rare, epic, legendary]
+      responses:
+        '200':
+          description: Paginated item list
+    post:
+      tags: [Items]
+      summary: Create an item
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [game_id, name]
+              properties:
+                game_id:
+                  type: string
+                  format: uuid
+                name:
+                  type: string
+                description:
+                  type: string
+                  nullable: true
+                rarity:
+                  type: string
+                  enum: [common, uncommon, rare, epic, legendary]
+      responses:
+        '201':
+          description: Item created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Item'
+
+  /items/{id}:
+    get:
+      tags: [Items]
+      summary: Get an item
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Item found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Item'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    put:
+      tags: [Items]
+      summary: Update an item
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                rarity:
+                  type: string
+                  enum: [common, uncommon, rare, epic, legendary]
+      responses:
+        '200':
+          description: Updated item
+    delete:
+      tags: [Items]
+      summary: Delete an item
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Deleted
+
+  # ── Inventory ────────────────────────────────────────────────────────────────
+
+  /players/me/inventory:
+    get:
+      tags: [Inventory]
+      summary: Get current player's inventory
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Inventory list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PlayerItem'
+    post:
+      tags: [Inventory]
+      summary: Award an item to current player (upserts quantity)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [item_id]
+              properties:
+                item_id:
+                  type: string
+                  format: uuid
+                quantity:
+                  type: integer
+                  minimum: 1
+                  default: 1
+      responses:
+        '200':
+          description: Quantity incremented (already owned)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/PlayerItem'
+        '201':
+          description: Item added to inventory
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/PlayerItem'
+
+  /players/me/inventory/{itemId}:
+    delete:
+      tags: [Inventory]
+      summary: Remove an item from current player's inventory
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Item removed
+        '404':
+          description: Item not in inventory
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ── Gifts ───────────────────────────────────────────────────────────────────
+
+  /gifts:
+    post:
+      tags: [Gifts]
+      summary: Send a gift to another player
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recipient_id, item_id]
+              properties:
+                recipient_id:
+                  type: string
+                  format: uuid
+                item_id:
+                  type: string
+                  format: uuid
+      responses:
+        '201':
+          description: Gift sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Gift'
+        '422':
+          description: Sender does not own item / self-gift attempt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /gifts/sent:
+    get:
+      tags: [Gifts]
+      summary: Get gifts sent by current player
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Sent gifts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Gift'
+
+  /gifts/received:
+    get:
+      tags: [Gifts]
+      summary: Get gifts received by current player
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Received gifts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Gift'
+
+  /gifts/{id}/accept:
+    patch:
+      tags: [Gifts]
+      summary: Accept a pending gift (transfers item to recipient)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Gift accepted, item transferred
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Gift'
+        '404':
+          description: Gift not found or not pending
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /gifts/{id}/decline:
+    patch:
+      tags: [Gifts]
+      summary: Decline a pending gift
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Gift declined
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Gift'
+        '404':
+          description: Gift not found or not pending
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ── Progress & Leaderboard ───────────────────────────────────────────────────
+
+  /players/me/progress:
+    get:
+      tags: [Progress]
+      summary: Get all game progress for current player
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Progress list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Progress'
+    post:
+      tags: [Progress]
+      summary: Submit a score (only updates if higher than current best)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [game_id, score]
+              properties:
+                game_id:
+                  type: string
+                  format: uuid
+                score:
+                  type: integer
+                  minimum: 0
+      responses:
+        '200':
+          description: Score unchanged (submitted score was not higher)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Progress'
+        '201':
+          description: New progress record created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Progress'
+
+  /players/me/progress/{gameId}:
+    get:
+      tags: [Progress]
+      summary: Get current player's progress for a specific game
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: gameId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Progress record
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Progress'
+        '404':
+          description: No progress found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /leaderboard/{gameId}:
+    get:
+      tags: [Leaderboard]
+      summary: Top players for a game
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: gameId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 100
+      responses:
+        '200':
+          description: Ranked leaderboard
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LeaderboardEntry'
+
+  /leaderboard/{gameId}/me:
+    get:
+      tags: [Leaderboard]
+      summary: Current player's rank for a game
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: gameId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Player rank and score
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      rank:
+                        type: integer
+                        nullable: true
+                      score:
+                        type: integer
+                      updated_at:
+                        type: string
+                        format: date-time
+                        nullable: true
+
+  # ── Ads ─────────────────────────────────────────────────────────────────────
+
+  /ads/status:
+    get:
+      tags: [Ads]
+      summary: Get current ad state for the player
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Ad status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AdStatus'
+
+  /ads/start:
+    post:
+      tags: [Ads]
+      summary: Acknowledge ad start — returns server-side token + 30s duration
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Ad started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      token:
+                        type: string
+                      duration_seconds:
+                        type: integer
+                        example: 30
+        '403':
+          description: Player is subscribed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '409':
+          description: No ad pending
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /ads/complete:
+    post:
+      tags: [Ads]
+      summary: Mark ad as watched — server validates token and 30s elapsed
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        '200':
+          description: Ad completed, state reset to idle
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      success:
+                        type: boolean
+        '400':
+          description: Invalid/expired token or ad not yet complete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  # ── SDK ──────────────────────────────────────────────────────────────────────
+
+  /sdk/handshake:
+    get:
+      tags: [SDK]
+      summary: SDK authentication handshake
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Handshake response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      platform:
+                        type: string
+                        example: GRIDFORGE
+                      version:
+                        type: string
+                        example: 1.0.0
+                      player_id:
+                        type: string
+                        format: uuid
+                      username:
+                        type: string
+                      authenticated:
+                        type: boolean
+
+  /openapi.json:
+    get:
+      tags: [SDK]
+      summary: OpenAPI spec as JSON (for SDK code generation)
+      responses:
+        '200':
+          description: OpenAPI spec in JSON format

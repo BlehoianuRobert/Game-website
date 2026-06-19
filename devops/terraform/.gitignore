@@ -1,0 +1,18 @@
+# Local .terraform folder (contains binaries/providers)
+.terraform/
+
+# Terraform state files
+*.tfstate
+*.tfstate.backup
+*.tfstate.lock.info
+
+# Sensitive variables
+*.tfvars
+*.tfvars.json
+
+# Crash logs
+crash.log
+
+# Ignore local override files
+override.tf
+override.tf.json

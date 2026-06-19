@@ -1,0 +1,47 @@
+name: GridForge — Deploy & QA Tests
+ 
+on:
+  workflow_dispatch:     
+ 
+jobs:
+  deploy-and-test:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+ 
+      - name: Build GridForge image
+        run: docker build -t gridforge:latest src/api/GRIDFORGE
+ 
+      - name: Write .env from secret
+        run: echo "${{ secrets.GRIDFORGE_ENV }}" > src/api/GRIDFORGE/.env
+ 
+      - name: (Re)start GridForge container
+        run: |
+          docker rm -f gridforge 2>/dev/null || true
+          docker run -d --name gridforge -p 8000:80 \
+            --env-file src/api/GRIDFORGE/.env \
+            gridforge:latest
+ 
+      - name: Wait for GridForge to be ready
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000 >/dev/null; then
+              echo "GridForge is up"; exit 0
+            fi
+            echo "Waiting for GridForge... attempt $i"; sleep 2
+          done
+          echo "GridForge did not become ready in time"
+          docker logs gridforge
+          exit 1
+ 
+      - name: Run QA integration tests (non-blocking)
+        continue-on-error: true
+        run: |
+          python3 -m venv qa-venv
+          source qa-venv/bin/activate
+          pip install --quiet pytest requests
+          python -m pytest qa/tests/test_faza2_real.py -v
+          deactivate
+          rm -rf qa-venv
+ 

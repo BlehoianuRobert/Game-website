@@ -1,0 +1,49 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Unit Tests
+        env:
+          DB_URL: ${{ secrets.DB_URL }}
+        run: |
+          python3 -m venv venv
+          source venv/bin/activate
+          pip install -r devops/app/requirements.txt
+          pip install pytest
+          cd devops/app
+          python -m pytest tests/test_unit.py -v
+          deactivate
+          rm -rf venv
+
+      - name: Build Docker Image
+        run: |
+          docker build -t vector-api:${{ github.sha }} -t vector-api:latest devops/app/
+
+
+      - name: Trivy Security Scan
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:latest image --severity HIGH,CRITICAL \
+            --exit-code 0 vector-api:latest
+
+
+      - name: Load Image into Kind
+        run: |
+          kind load docker-image vector-api:${{ github.sha }} --name hackathon
+          kind load docker-image vector-api:latest --name hackathon
+
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install vector-api devops/helm/vector-api \
+            --set image.tag=${{ github.sha }} \
+            --set env.DB_URL="${{ secrets.DB_URL }}"

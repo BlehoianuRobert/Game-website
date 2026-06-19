@@ -1,0 +1,33 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: db-cleanup
+  namespace: default
+spec:
+  schedule: "*/5 * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: cleanup
+              image: mysql:8.0
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  mysql -h "$DB_HOST" -u "$DB_USER" -p"$DB_PASS" "$DB_NAME" \
+                    -e "DELETE FROM vectors WHERE created_at < NOW() - INTERVAL 10 MINUTE;"
+              env:
+                - name: DB_HOST
+                  value: "hackathon-mysql.cl6mcmc2kuc7.eu-central-1.rds.amazonaws.com"
+                - name: DB_USER
+                  value: "vectoruser"
+                - name: DB_PASS
+                  valueFrom:
+                    secretKeyRef:
+                      name: db-credentials
+                      key: password
+                - name: DB_NAME
+                  value: "vectorapi"
+          restartPolicy: OnFailure

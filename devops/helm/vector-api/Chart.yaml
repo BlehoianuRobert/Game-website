@@ -1,0 +1,6 @@
+apiVersion: v2
+name: vector_api
+description: A Helm chart for vector_api app
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+
+# Editor
+.vscode/
+.idea/
+
+# Personal / local-only — kept out of main
+mock_server.py
+GHID_INVATARE.md
